@@ -11,3 +11,4 @@ from .nerf_standard_dataset import *
 from .mesh_sdf_dataset import *
 from .octree_sdf_dataset import *
 from .random_view_dataset import *
+from .phototourism_dataset import *

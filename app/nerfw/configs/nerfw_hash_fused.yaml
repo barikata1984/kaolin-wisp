@@ -52,7 +52,7 @@ tracer: # A tracer for intersecting rays with the blas, generating samples along
   step_size: 1.0
 
 dataset:  # Train & validation dataset
-  constructor: 'NeRFSyntheticDataset'
+  constructor: 'PhototourismDataset'
   dataset_path: 'data/'
   split: 'train'      # Which subset of the dataset to use for training
   bg_color: [ 0.0, 0.0, 0.0 ]

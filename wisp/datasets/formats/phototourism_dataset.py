@@ -76,7 +76,7 @@ class PhototourismDataset(MultiviewDataset):
         self._img_shape = self.data["rgb"].shape[1:3]
         self.flatten_tensors()
 
-    def create_split(self, split: str, transform: Optional[Callable] = None) -> NeRFSyntheticDataset:
+    def create_split(self, split: str, transform: Optional[Callable] = None) -> PhototourismDataset:
         """ Creates a dataset with the same parameters and a different split.
         This is a convenient way of creating validation and test datasets, while making sure they're compatible
         with the train dataset.
@@ -101,7 +101,7 @@ class PhototourismDataset(MultiviewDataset):
             validation_split.transform = transform
             return validation_split
 
-        return NeRFSyntheticDataset(
+        return PhototourismDataset(
             dataset_path=self.dataset_path,
             split=split,
             bg_color=self.bg_color,
@@ -237,7 +237,9 @@ class PhototourismDataset(MultiviewDataset):
             if mip is not None and mip > 0:
                 img = resize_mip(img, mip, interpolation=cv2.INTER_AREA)
             return dict(basename=basename,
-                        img=torch.FloatTensor(img), pose=torch.FloatTensor(np.array(frame['transform_matrix'])))
+                        img=torch.FloatTensor(img), 
+                        pose=torch.FloatTensor(np.array(frame['transform_matrix'])),
+                        )
         else:
             # log.info(f"File name {fpath} doesn't exist. Ignoring.")
             return None
@@ -273,7 +275,7 @@ class PhototourismDataset(MultiviewDataset):
         """ Internal function used by the multiprocessing loader: allocates a single entry task for a worker.
         """
         torch.set_num_threads(1)
-        result = NeRFSyntheticDataset._load_single_entry(args['frame'], args['root'], mip=args['mip'])
+        result = PhototourismDataset._load_single_entry(args['frame'], args['root'], mip=args['mip'])
         if result is None:
             return dict(basename=None, img=None, pose=None)
         else:
@@ -300,7 +302,7 @@ class PhototourismDataset(MultiviewDataset):
         try:
             mp_entries = [dict(frame=frame, root=self.dataset_path, mip=self.mip)
                           for frame in metadata['frames']]
-            iterator = p.imap(NeRFSyntheticDataset._parallel_load_standard_imgs, mp_entries)
+            iterator = p.imap(PhototourismDataset._parallel_load_standard_imgs, mp_entries)
 
             for _ in tqdm(range(len(metadata['frames']))):
                 result = next(iterator)
@@ -399,6 +401,7 @@ class PhototourismDataset(MultiviewDataset):
         poses[..., :3, 3] += torch.FloatTensor(offset)
 
         # nerf-synthetic uses a default far value of 6.0
+        # 後でなんか書いて
         default_far = 5.0
         default_near = 1.0
 

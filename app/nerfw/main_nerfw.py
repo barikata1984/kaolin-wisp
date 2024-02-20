@@ -19,7 +19,7 @@ from wisp.models.grids import OctreeGrid, CodebookOctreeGrid, TriplanarGrid, Has
 from wisp.models.nefs import NeuralRadianceField
 from wisp.models.pipeline import Pipeline
 from wisp.tracers import PackedRFTracer
-from wisp.datasets import NeRFSyntheticDataset, RTMVDataset, SampleRays
+from wisp.datasets import PhototourismDataset, RTMVDataset, SampleRays
 from wisp.trainers import MultiviewTrainer, ConfigMultiviewTrainer
 from wisp.trainers.tracker import Tracker, ConfigTracker
 
@@ -41,7 +41,7 @@ class NeRFWAppConfig:
     """ Tracers are responsible for taking input rays, marching them through the neural field to render 
     an output RenderBuffer.
     """
-    dataset: autoconfig(NeRFSyntheticDataset, RTMVDataset)
+    dataset: autoconfig(PhototourismDataset, RTMVDataset)
     """ Multiview dataset used by the trainer. """
     dataset_transform: autoconfig(SampleRays)
     """ Composition of dataset transforms used online by the dataset to process batches. """
