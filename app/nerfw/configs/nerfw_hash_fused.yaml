@@ -29,7 +29,7 @@ grid: # Feature grid, the backbone of the neural field
   max_grid_res: 1024
 
 nef:  # Neural field: combines grid, decoders and positional embedders
-  constructor: 'NeuralRadianceField'
+  constructor: 'NeRFInTheWild'
   pos_embedder: 'none'        # coordinates positional embedding options: 'none', 'identity', 'positional'
   view_embedder: 'positional' # ray direction embedding options: 'none', 'identity', 'positional'
   pos_multires: 10            # num of embedding frequencies, if embedder is not None
@@ -61,7 +61,7 @@ dataset:  # Train & validation dataset
                            # If dataset_num_workers < 1, processing will take place on the main process.
 
 dataset_transform:
-  constructor: 'SampleRays'
+  constructor: 'SampleRays'  # こいつ
   num_samples: 4096
 
 trainer:

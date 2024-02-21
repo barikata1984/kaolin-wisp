@@ -73,8 +73,8 @@ class PhototourismDataset(MultiviewDataset):
         self._transform_file = self._validate_and_find_transform(self.dataset_path, self.split)
         self.data = self.load()
 
-        self._img_shape = self.data["rgb"].shape[1:3]
-        self.flatten_tensors()
+        self._img_shape = float('nan')  # self.data["rgb"].shape[1:3]
+#        self.flatten_tensors()
 
     def create_split(self, split: str, transform: Optional[Callable] = None) -> PhototourismDataset:
         """ Creates a dataset with the same parameters and a different split.
@@ -129,7 +129,8 @@ class PhototourismDataset(MultiviewDataset):
         )
 
         if self.transform is not None:
-            out = self.transform(out)
+            out = self.transform(out)  # SampleRays ってのを　
+            # 同一サイズの画像を固めたテンソルにあてる前提の SampleRays ってのを使ってる？
 
         return out
 
@@ -239,6 +240,10 @@ class PhototourismDataset(MultiviewDataset):
             return dict(basename=basename,
                         img=torch.FloatTensor(img), 
                         pose=torch.FloatTensor(np.array(frame['transform_matrix'])),
+                        fx=frame['fx'],
+                        fy=frame['fy'],
+                        cx=frame['cx'],
+                        cy=frame['cy'],
                         )
         else:
             # log.info(f"File name {fpath} doesn't exist. Ignoring.")
@@ -260,6 +265,10 @@ class PhototourismDataset(MultiviewDataset):
         imgs = []
         poses = []
         basenames = []
+        fxs = []
+        fys = []
+        cxs = []
+        cys = []
 
         for frame in tqdm(metadata['frames'], desc='loading data'):
             _data = self._load_single_entry(frame, self.dataset_path, mip=self.mip)
@@ -267,8 +276,12 @@ class PhototourismDataset(MultiviewDataset):
                 basenames.append(_data["basename"])
                 imgs.append(_data["img"])
                 poses.append(_data["pose"])
+                fxs.append(_data['fx'])
+                fys.append(_data['fy'])
+                cxs.append(_data['cx'])
+                cys.append(_data['cy'])
 
-        return self._collect_data_entries(metadata=metadata, basenames=basenames, imgs=imgs, poses=poses)
+        return self._collect_data_entries(metadata=metadata, basenames=basenames, imgs=imgs, poses=poses, fxs=fxs, fys=fys, cxs=cxs, cys=cys)
 
     @staticmethod
     def _parallel_load_standard_imgs(args):
@@ -306,7 +319,7 @@ class PhototourismDataset(MultiviewDataset):
 
             for _ in tqdm(range(len(metadata['frames']))):
                 result = next(iterator)
-                basename = result['basename']
+                basename = result['basename']  # ここで _data の変わりに iterator の要素である result を使うのがキモっぽい 
                 img = result['img']
                 pose = result['pose']
                 if basename is not None:
@@ -321,7 +334,7 @@ class PhototourismDataset(MultiviewDataset):
 
         return self._collect_data_entries(metadata=metadata, basenames=basenames, imgs=imgs, poses=poses)
 
-    def _collect_data_entries(self, metadata, basenames, imgs, poses) -> Dict[str, Union[torch.Tensor, Rays, Camera]]:
+    def _collect_data_entries(self, metadata, basenames, imgs, poses, fxs, fys, cxs, cys) -> Dict[str, Union[torch.Tensor, Rays, Camera]]:
         """ Internal function for aggregating the pre-loaded multi-views.
         This function will:
             1. Read the metadata & compute the intrinsic parameters of the camera view, (such as fov and focal length
@@ -333,85 +346,51 @@ class PhototourismDataset(MultiviewDataset):
             4. Invoke ray generation on each camera view.
             5. Stack the images pixel values and rays as per-view information entries.
         """
-        imgs = torch.stack(imgs)
-        poses = torch.stack(poses)
+#        imgs = torch.stack(imgs)  # ~ (num_images, h, w, rgba]
+#        poses = torch.stack(poses)  # ~ (num_images = num_cameras, 4, 4), I guess
 
-        # TODO(ttakikawa): Assumes all images are same shape and focal. Maybe breaks in general...
-        h, w = imgs[0].shape[:2]
+        rgbs = [] 
+        masks = [] 
+        rays = [] 
+        cameras = {}
+       
+        for basename, img, pose, fx, fy, cx, cy in zip(basenames, imgs, poses, fxs, fys, cxs, cys):
+            h, w = img.shape[:2]
+            
+            if 'fix_premult' in metadata:
+                log.info("WARNING: The dataset expects premultiplied alpha correction, "
+                         "but the current implementation does not handle this.")
 
-        if 'x_fov' in metadata:
-            # Degrees
-            x_fov = metadata['x_fov']
-            fx = (0.5 * w) / np.tan(0.5 * float(x_fov) * (np.pi / 180.0))
-            if 'y_fov' in metadata:
-                y_fov = metadata['y_fov']
-                fy = (0.5 * h) / np.tan(0.5 * float(y_fov) * (np.pi / 180.0))
-            else:
-                fy = fx
-        elif 'fl_x' in metadata and False:
-            fx = float(metadata['fl_x']) / float(2**self.mip)
-            if 'fl_y' in metadata:
-                fy = float(metadata['fl_y']) / float(2**self.mip)
-            else:
-                fy = fx
-        elif 'camera_angle_x' in metadata:
-            # Radians
-            camera_angle_x = metadata['camera_angle_x']
-            fx = (0.5 * w) / np.tan(0.5 * float(camera_angle_x))
+            if 'k1' in metadata:
+                log.info \
+                    ("WARNING: The dataset expects distortion correction, but the current implementation does not handle this.")
 
-            if 'camera_angle_y' in metadata:
-                camera_angle_y = metadata['camera_angle_y']
-                fy = (0.5 * h) / np.tan(0.5 * float(camera_angle_y))
-            else:
-                fy = fx
+            if 'rolling_shutter' in metadata:
+                log.info("WARNING: The dataset expects rolling shutter correction,"
+                         "but the current implementation does not handle this.")
 
-        else:
-            fx = 0.0
-            fy = 0.0
+            # The principal point in wisp are always a displacement in pixels from the center of the image.
+            # The standard dataset generally stores the absolute location on the image to specify the principal point.
+            # Thus, we need to scale and translate them such that they are offsets from the center.
+            x0 = (cx) / (2**self.mip) - (w//2)
+            y0 = (cy) / (2**self.mip) - (h//2)
 
-        if 'fix_premult' in metadata:
-            log.info("WARNING: The dataset expects premultiplied alpha correction, "
-                     "but the current implementation does not handle this.")
+            offset = metadata['offset'] if 'offset' in metadata else [0 ,0 ,0]
+            scale = metadata['scale'] if 'scale' in metadata else 1.0
+            aabb_scale = metadata['aabb_scale'] if 'aabb_scale' in metadata else 1.25
 
-        if 'k1' in metadata:
-            log.info \
-                ("WARNING: The dataset expects distortion correction, but the current implementation does not handle this.")
+            # TODO(ttakikawa): Actually scale the AABB instead? Maybe
+            pose[..., :3, 3] /= aabb_scale
+            pose[..., :3, 3] *= scale
+            pose[..., :3, 3] += torch.FloatTensor(offset)
 
-        if 'rolling_shutter' in metadata:
-            log.info("WARNING: The dataset expects rolling shutter correction,"
-                     "but the current implementation does not handle this.")
+            # nerf-synthetic uses a default far value of 6.0
+            default_far = 5.0
+            default_near = 1.0
 
-        # The principal point in wisp are always a displacement in pixels from the center of the image.
-        x0 = 0.0
-        y0 = 0.0
-        # The standard dataset generally stores the absolute location on the image to specify the principal point.
-        # Thus, we need to scale and translate them such that they are offsets from the center.
-        if 'cx' in metadata:
-            x0 = (float(metadata['cx']) / (2**self.mip)) - (w//2)
-        if 'cy' in metadata:
-            y0 = (float(metadata['cy']) / (2**self.mip)) - (h//2)
-
-        offset = metadata['offset'] if 'offset' in metadata else [0 ,0 ,0]
-        scale = metadata['scale'] if 'scale' in metadata else 1.0
-        aabb_scale = metadata['aabb_scale'] if 'aabb_scale' in metadata else 1.25
-
-        # TODO(ttakikawa): Actually scale the AABB instead? Maybe
-        poses[..., :3, 3] /= aabb_scale
-        poses[..., :3, 3] *= scale
-        poses[..., :3, 3] += torch.FloatTensor(offset)
-
-        # nerf-synthetic uses a default far value of 6.0
-        # 後でなんか書いて
-        default_far = 5.0
-        default_near = 1.0
-
-        rays = []
-
-        cameras = dict()
-        for i in range(imgs.shape[0]):
-            view_matrix = torch.zeros_like(poses[i])
-            view_matrix[:3, :3] = poses[i][:3, :3].T
-            view_matrix[:3, -1] = torch.matmul(-view_matrix[:3, :3], poses[i][:3, -1])
+            view_matrix = torch.zeros_like(pose)
+            view_matrix[:3, :3] = pose[:3, :3].T
+            view_matrix[:3, -1] = torch.matmul(-view_matrix[:3, :3], pose[:3, -1])
             view_matrix[3, 3] = 1.0
             camera = Camera.from_args(view_matrix=view_matrix,
                                       focal_x=fx,
@@ -424,22 +403,30 @@ class PhototourismDataset(MultiviewDataset):
                                       y0=y0,
                                       dtype=torch.float)
             camera.change_coordinate_system(blender_coords())
-            cameras[basenames[i]] = camera
+#            cameras[basenames[i]] = camera
             ray_grid = generate_centered_pixel_coords(camera.width, camera.height,
                                                       camera.width, camera.height, device='cuda')
-            rays.append \
-                (generate_pinhole_rays(camera.to(ray_grid[0].device), ray_grid).reshape(camera.height, camera.width, 3))
+#            rays.append \
+#                (generate_pinhole_rays(camera.to(ray_grid[0].device), ray_grid).reshape(camera.height, camera.width, 3))  # list-population of camera rays describedin camera   
+            image_rays = generate_pinhole_rays(camera.to(ray_grid[0].device), ray_grid).reshape(camera.height, camera.width, 3)  # list-population of camera rays describedin camera   
+#            image_rays = Rays.stack(rays).to(dtype=torch.float).to('cpu')
+            image_rays = Rays.stack(image_rays).to(dtype=torch.float).to('cpu')
 
-        rays = Rays.stack(rays).to(dtype=torch.float).to('cpu')
+            rgb = img[... ,:3]
+            alpha = img[... ,3:4]
+            if alpha.numel() == 0:
+                mask = torch.ones_like(rgb[..., 0:1]).bool()
+            else:
+                mask = (alpha > 0.5).bool()
+                rgb = rgb[...,:3] * alpha + (1-alpha) * np.array(self.bg_color).astype(np.float32)
+                rgb = np.clip(rgb, 0.0, 1.0)
 
-        rgbs = imgs[... ,:3]
-        alpha = imgs[... ,3:4]
-        if alpha.numel() == 0:
-            masks = torch.ones_like(rgbs[... ,0:1]).bool()
-        else:
-            masks = (alpha > 0.5).bool()
-            rgbs = rgbs[...,:3] * alpha + (1-alpha) * np.array(self.bg_color).astype(np.float32)
-            rgbs = np.clip(rgbs, 0.0, 1.0)
+            print(f"{rgb.device=}")
+
+            rgbs.append(rgb)
+            masks.append(mask)
+            rays.append(image_rays)
+            cameras[basename] = camera
 
         return {"rgb": rgbs, "masks": masks, "rays": rays, "cameras": cameras}
 
@@ -465,4 +452,4 @@ class PhototourismDataset(MultiviewDataset):
     @property
     def num_images(self) -> int:
         """ Returns the number of views this dataset stores. """
-        return self.data["rgb"].shape[0]
+        return len(self.data["rgb"])  # .shape[0]

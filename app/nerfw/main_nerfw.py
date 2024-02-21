@@ -16,7 +16,7 @@ from wisp.config import parse_config, configure, autoconfig, instantiate, print_
 from wisp.framework import WispState
 from wisp.accelstructs import OctreeAS, AxisAlignedBBoxAS
 from wisp.models.grids import OctreeGrid, CodebookOctreeGrid, TriplanarGrid, HashGrid
-from wisp.models.nefs import NeuralRadianceField
+from wisp.models.nefs import NeRFInTheWild
 from wisp.models.pipeline import Pipeline
 from wisp.tracers import PackedRFTracer
 from wisp.datasets import PhototourismDataset, RTMVDataset, SampleRays
@@ -32,7 +32,7 @@ class NeRFWAppConfig:
     """ Bottom Level Acceleration structure used by the neural field grid to track occupancy, accelerate raymarch. """
     grid: autoconfig(OctreeGrid, HashGrid.from_geometric, TriplanarGrid, CodebookOctreeGrid)
     """ Feature grid used by the neural field. Grids are located in `wisp.models.grids` """
-    nef: autoconfig(NeuralRadianceField)
+    nef: autoconfig(NeRFInTheWild)
     """ Neural field configuration, including the feature grid, decoders and optional embedders.
     NeuralRadianceField maps 3D coordinates (+ 2D view direction) -> RGB + density.
     Uses spatial feature grids internally for faster feature interpolation and raymarching.
