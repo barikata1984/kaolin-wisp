@@ -239,11 +239,9 @@ class PhototourismDataset(MultiviewDataset):
                 img = resize_mip(img, mip, interpolation=cv2.INTER_AREA)
             return dict(basename=basename,
                         img=torch.FloatTensor(img), 
-                        pose=torch.FloatTensor(np.array(frame['transform_matrix'])),
-                        fx=frame['fx'],
-                        fy=frame['fy'],
-                        cx=frame['cx'],
-                        cy=frame['cy'],
+                        pose=torch.FloatTensor(frame['transform_matrix']),
+                        intrinsics=frame['intrinsics'],
+                        dist_coeffs=frame['dist_coeffs'],
                         )
         else:
             # log.info(f"File name {fpath} doesn't exist. Ignoring.")
@@ -265,10 +263,8 @@ class PhototourismDataset(MultiviewDataset):
         imgs = []
         poses = []
         basenames = []
-        fxs = []
-        fys = []
-        cxs = []
-        cys = []
+        intrinsics_dicts = []
+        dist_coeffs_dicts = []
 
         for frame in tqdm(metadata['frames'], desc='loading data'):
             _data = self._load_single_entry(frame, self.dataset_path, mip=self.mip)
@@ -276,12 +272,14 @@ class PhototourismDataset(MultiviewDataset):
                 basenames.append(_data["basename"])
                 imgs.append(_data["img"])
                 poses.append(_data["pose"])
-                fxs.append(_data['fx'])
-                fys.append(_data['fy'])
-                cxs.append(_data['cx'])
-                cys.append(_data['cy'])
+                intrinsics_dicts.append(_data['intrinsics'])
+                dist_coeffs_dicts.append(_data['dist_coeffs'])
 
-        return self._collect_data_entries(metadata=metadata, basenames=basenames, imgs=imgs, poses=poses, fxs=fxs, fys=fys, cxs=cxs, cys=cys)
+        return self._collect_data_entries(metadata=metadata, basenames=basenames, 
+                                          imgs=imgs, poses=poses, 
+                                          intrinsics_dicts=intrinsics_dicts, 
+                                          dist_coeffs_dicts=dist_coeffs_dicts,
+                                          )
 
     @staticmethod
     def _parallel_load_standard_imgs(args):
@@ -334,7 +332,7 @@ class PhototourismDataset(MultiviewDataset):
 
         return self._collect_data_entries(metadata=metadata, basenames=basenames, imgs=imgs, poses=poses)
 
-    def _collect_data_entries(self, metadata, basenames, imgs, poses, fxs, fys, cxs, cys) -> Dict[str, Union[torch.Tensor, Rays, Camera]]:
+    def _collect_data_entries(self, metadata, basenames, imgs, poses, intrinsics_dicts, dist_coeffs_dicts) -> Dict[str, Union[torch.Tensor, Rays, Camera]]:
         """ Internal function for aggregating the pre-loaded multi-views.
         This function will:
             1. Read the metadata & compute the intrinsic parameters of the camera view, (such as fov and focal length
@@ -353,31 +351,43 @@ class PhototourismDataset(MultiviewDataset):
         masks = [] 
         rays = [] 
         cameras = {}
+        checked_dist_coeffs = False
        
-        for basename, img, pose, fx, fy, cx, cy in zip(basenames, imgs, poses, fxs, fys, cxs, cys):
+        for basename, img, pose, intrinsics, dist_coeffs in zip(basenames, imgs, poses, 
+                                                                intrinsics_dicts, 
+                                                                dist_coeffs_dicts):
+
             h, w = img.shape[:2]
-            
+           
+            cx = intrinsics.get("CX")
+            cy = intrinsics.get("CY")
+
+            fx = fy = intrinsics.get("F")
+            if intrinsics.get("FX") is not None:
+                fx = intrinsics["FX"]
+                fy = intrinsics["FY"]
+
+            if not checked_dist_coeffs and bool(dist_coeffs):  # dist_coeffs is True if it has 
+                                                               # some key-value pairs
+                log.info("WARNING: The dataset includes the distortion coefficients with which each "
+                         "image is undistorted but the current implementation expects the image is "
+                         "undistorted with the dense reconstruction of COLMAP beforehand.")
+                checked_dist_coeffs = True       
+
             if 'fix_premult' in metadata:
                 log.info("WARNING: The dataset expects premultiplied alpha correction, "
                          "but the current implementation does not handle this.")
-
-            if 'k1' in metadata:
-                log.info \
-                    ("WARNING: The dataset expects distortion correction, but the current implementation does not handle this.")
 
             if 'rolling_shutter' in metadata:
                 log.info("WARNING: The dataset expects rolling shutter correction,"
                          "but the current implementation does not handle this.")
 
-            # The principal point in wisp are always a displacement in pixels from the center of the image.
-            # The standard dataset generally stores the absolute location on the image to specify the principal point.
-            # Thus, we need to scale and translate them such that they are offsets from the center.
             x0 = (cx) / (2**self.mip) - (w//2)
             y0 = (cy) / (2**self.mip) - (h//2)
 
             offset = metadata['offset'] if 'offset' in metadata else [0 ,0 ,0]
             scale = metadata['scale'] if 'scale' in metadata else 1.0
-            aabb_scale = metadata['aabb_scale'] if 'aabb_scale' in metadata else 1.25
+            aabb_scale = metadata['aabb_scale'] if 'aabb_scale' in metadata else 1.25 # leave a littl margin 
 
             # TODO(ttakikawa): Actually scale the AABB instead? Maybe
             pose[..., :3, 3] /= aabb_scale
@@ -408,24 +418,25 @@ class PhototourismDataset(MultiviewDataset):
                                                       camera.width, camera.height, device='cuda')
 #            rays.append \
 #                (generate_pinhole_rays(camera.to(ray_grid[0].device), ray_grid).reshape(camera.height, camera.width, 3))  # list-population of camera rays describedin camera   
-            image_rays = generate_pinhole_rays(camera.to(ray_grid[0].device), ray_grid).reshape(camera.height, camera.width, 3)  # list-population of camera rays describedin camera   
+            image_rays = generate_pinhole_rays(camera.to(ray_grid[0].device), ray_grid)  # list-population of camera rays describedin camera   
+            image_rays = image_rays.reshape(camera.height, camera.width, 3)
 #            image_rays = Rays.stack(rays).to(dtype=torch.float).to('cpu')
             image_rays = Rays.stack(image_rays).to(dtype=torch.float).to('cpu')
 
-            rgb = img[... ,:3]
-            alpha = img[... ,3:4]
+            rgb = img[..., :3]
+            alpha = img[..., 3:4]
             if alpha.numel() == 0:
                 mask = torch.ones_like(rgb[..., 0:1]).bool()
             else:
                 mask = (alpha > 0.5).bool()
-                rgb = rgb[...,:3] * alpha + (1-alpha) * np.array(self.bg_color).astype(np.float32)
+                rgb = rgb[..., :3] * alpha + (1-alpha) * np.array(self.bg_color).astype(np.float32)
                 rgb = np.clip(rgb, 0.0, 1.0)
 
-            print(f"{rgb.device=}")
-
-            rgbs.append(rgb)
-            masks.append(mask)
-            rays.append(image_rays)
+            # Flatten the tensors here because the images in the phototourism dataset does not have 
+            # the same size. flatten_tensors() below does not work.
+            rgbs.append(rgb.reshape(-1, 3))
+            masks.append(mask.reshape(-1, 1))
+            rays.append(image_rays.reshape(-1, 3))
             cameras[basename] = camera
 
         return {"rgb": rgbs, "masks": masks, "rays": rays, "cameras": cameras}

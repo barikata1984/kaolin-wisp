@@ -62,7 +62,7 @@ dataset:  # Train & validation dataset
 
 dataset_transform:
   constructor: 'SampleRays'  # こいつ
-  num_samples: 4096
+  num_samples: 2048  # 4096
 
 trainer:
   # Base Trainer config
