@@ -62,7 +62,7 @@ class MultiviewBatch(Batch):
                     each ray intersects.
                 *args, **kwargs - may specify any additional channels of information a ray or view can carry.
         """
-        super().__init__(rays=rays, cameras=cameras, rgb=rgb)
+        super().__init__(rays=rays, cameras=cameras, rgb=rgb, *args, **kwargs)
 
     def ray_values(self) -> Dict[str, Any]:
         """ Specifies a dictionary of the ray specific supervision channels this MultiviewBatch carries. """
@@ -104,7 +104,7 @@ class SDFBatch(Batch):
                 the nearest point on the surface.
                 *args, **kwargs - may specify any additional channels of information a coordinate or batch can carry.
         """
-        super().__init__(coords=coords, sdf=sdf, rgb=rgb, normals=normals)
+        super().__init__(coords=coords, sdf=sdf, rgb=rgb, normals=normals, *args, **kwargs)
 
     def coord_values(self) -> Dict[str, Any]:
         """ Specifies a dictionary of the coordinate specific supervision channels this SDFBatch carries. """
