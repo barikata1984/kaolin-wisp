@@ -376,7 +376,7 @@ class _BaseDashboard(ABC):
 class _Tensorboard(_BaseDashboard):
     """ Wraps around tensorboard functionality """
 
-    def __init__(self, log_dir: str, exp_name: Optional[str], log_fname: Optional[str]):
+    def __init__(self, log_dir: Optinal[str], exp_name: Optional[str], log_fname: Optional[str]):
         """ Tensorboard experiments dashboard.
         Args:
             log_dir (str): Path where the tensorboard runs are saved.
