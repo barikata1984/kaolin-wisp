@@ -22,6 +22,9 @@
     -   初期化ロジックを `__init__` から `__post_init__` へ移行。
     -   辞書ライクなアクセスを維持するため、`__setitem__`, `__getitem__`, `keys()` メソッドを実装。
     -   `clear`, `define_metric`, `log_metric`, `average_metric`, `finalize_epoch`, `active_metrics` メソッド内の全ての辞書式属性アクセス（例: `self[k]`）をドット属性アクセス（例: `getattr(self, k)`, `setattr(self, k, ...)`）に修正。
+### 3. `wisp/trainers/tracker/tracker.py`
+-   **`_WandB` クラス:
+    -   `log_table` メソッドにおいて、`wandb.Table` の `data` 引数に渡す形式が正しくなかったため、`data.values()` を `[list(data.values())]` に変更しました。これにより、`wandb.Table` が期待する「行のリスト」形式でデータが渡され、`wandb` へのログ記録が正しく行われるようになりました。
 
 ## 修正中に遭遇し解決した問題
 
