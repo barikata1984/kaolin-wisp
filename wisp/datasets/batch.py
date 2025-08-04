@@ -7,22 +7,32 @@
 # license agreement from NVIDIA CORPORATION & AFFILIATES is strictly prohibited.
 
 
-from attrdict import AttrDict
+from dataclasses import dataclass, field
 from typing import Optional, List, Dict, Any
 import torch
 from kaolin.render.camera import Camera
 from wisp.core import Rays
 
 
-class Batch(AttrDict):
+@dataclass
+class Batch:
+    _data: Dict[str, Any] = field(default_factory=dict, init=False, repr=False)
     """ Represents a single batch of information sampled and collated from a WispDataset.
     Batches in Wisp keep a general structure by subclassing python's dictionaries and using their semantics.
     The exact fields each batch contain depend on the dataset type.
     """
-    def __init__(self, *args, **kwargs):
-        super().__init__()
+    def __post_init__(self, *args, **kwargs):
         for k, v in dict(*args, **kwargs).items():
-            self[k] = v
+            setattr(self, k, v)
+
+    def __setitem__(self, key, value):
+        setattr(self, key, value)
+
+    def __getitem__(self, key):
+        return getattr(self, key)
+
+    def keys(self):
+        return self._data.keys()
 
     @property
     def fields(self) -> List[str]:
@@ -62,13 +72,13 @@ class MultiviewBatch(Batch):
                     each ray intersects.
                 *args, **kwargs - may specify any additional channels of information a ray or view can carry.
         """
-        super().__init__(rays=rays, cameras=cameras, rgb=rgb, *args, **kwargs)
+        super().__post_init__(rays=rays, cameras=cameras, rgb=rgb, *args, **kwargs)
 
     def ray_values(self) -> Dict[str, Any]:
         """ Specifies a dictionary of the ray specific supervision channels this MultiviewBatch carries. """
         out = dict()
-        if self['rgb'] is not None:
-            out['rgb'] = self['rgb']
+        if self.rgb is not None:
+            out['rgb'] = self.rgb
         return out
 
 
@@ -104,13 +114,13 @@ class SDFBatch(Batch):
                 the nearest point on the surface.
                 *args, **kwargs - may specify any additional channels of information a coordinate or batch can carry.
         """
-        super().__init__(coords=coords, sdf=sdf, rgb=rgb, normals=normals, *args, **kwargs)
+        super().__post_init__(coords=coords, sdf=sdf, rgb=rgb, normals=normals, *args, **kwargs)
 
     def coord_values(self) -> Dict[str, Any]:
         """ Specifies a dictionary of the coordinate specific supervision channels this SDFBatch carries. """
-        out = dict(sdf=self['sdf'])
-        if self['rgb'] is not None:
-            out['rgb'] = self['rgb']
-        if self['normals'] is not None:
-            out['normals'] = self['normals']
+        out = dict(sdf=self.sdf)
+        if self.rgb is not None:
+            out['rgb'] = self.rgb
+        if self.normals is not None:
+            out['normals'] = self.normals
         return out

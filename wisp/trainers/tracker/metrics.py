@@ -1,8 +1,10 @@
-from attrdict import AttrDict
-from typing import Union, Type
+from dataclasses import dataclass, field
+from typing import Union, Type, Dict, Any
 
 
-class MetricsBoard(AttrDict):
+@dataclass
+class MetricsBoard:
+    _data: Dict[str, Any] = field(default_factory=dict, init=False, repr=False)
     """ A module for aggregating losses and metrics during optimization.
     Usage:
         - define_metric() declares the metrics this board expects, call this once when the optimization starts.
@@ -13,9 +15,17 @@ class MetricsBoard(AttrDict):
         - clear() should be called to clear the aggregated logs and start a new accumulation (i.e. new epoch starts).
     """
 
-    def __init__(self):
-        super().__init__()
+    def __post_init__(self):
         self.num_samples = 0    # Number of samples reported so far, since __init__ or clear have been called.
+
+    def __setitem__(self, key, value):
+        setattr(self, key, value)
+
+    def __getitem__(self, key):
+        return getattr(self, key)
+
+    def keys(self):
+        return self._data.keys()
 
     def clear(self):
         """ Clears the MetricsBoard, essentially zeroing all accumulated values for defined metrics.
@@ -25,10 +35,10 @@ class MetricsBoard(AttrDict):
         for k in self.keys():
             if k in reserved_keys:
                 continue
-            if isinstance(self[k], list):
-                self[k].clear()
+            if isinstance(getattr(self, k), list):
+                getattr(self, k).clear()
             else:
-                self[k] *= 0
+                setattr(self, k, getattr(self, k) * 0)
 
         self.num_samples = 0
 
@@ -41,8 +51,8 @@ class MetricsBoard(AttrDict):
             aggregation_type (Union[Type[list], Type[int], Type[float]]):
                 type of accumulator to use for aggregating the metric.
         """
-        if name not in self:
-            self[name] = aggregation_type()
+        if not hasattr(self, name):
+            setattr(self, name, aggregation_type())
 
     def log_metric(self, key, value):
         """ log_metric is used to report a metric every iteration or epoch.
@@ -50,18 +60,18 @@ class MetricsBoard(AttrDict):
             key (str): A unique identifier for the metric, assumed to be defined with define_metric.
             value: The accumulated value for the metric, a numeric value.
         """
-        if key not in self:
+        if not hasattr(self, key):
             self.define_metric(key)
-        self[key].append(value)
+        getattr(self, key).append(value)
 
     def average_metric(self, metric):
         """ Returns the average value logged for the metric so far, i.e. for output logging purposes.
         Args:
             metric (str): A unique identifier for the metric, assumed to be defined with define_metric.
         """
-        if metric not in self:
+        if not hasattr(self, metric):
             raise ValueError(f'metric {metric} is not defined in MetricsBoard.')
-        metric_value = self[metric]
+        metric_value = getattr(self, metric)
         if isinstance(metric_value, list):
             metric_value = sum(metric_value)
         if self.num_samples == 0:
@@ -89,4 +99,4 @@ class MetricsBoard(AttrDict):
     @property
     def active_metrics(self):
         """ Returns all currently defined metrics. """
-        return [k for k in self.keys() if k not in 'num_samples']
+        return [k for k in self.keys() if k not in ['num_samples']] # num_samples is a field, not a metric
