@@ -1,0 +1,93 @@
+{
+  "name": "My Project",  // TODO: rename to your project name
+
+  // Use docker-compose as the backend — minimal devcontainer-specific config.
+  // The same docker-compose.yaml works standalone with `docker compose up`.
+  "dockerComposeFile": ["../docker/docker-compose.yaml"],
+  "service": "wisp-dev",
+  "workspaceFolder": "/workspace",
+
+  // Run as the non-root user created in the Dockerfile
+  "remoteUser": "${localEnv:USER:developer}",
+
+  "customizations": {
+    "vscode": {
+      "settings": {
+        // Shell
+        "terminal.integrated.defaultProfile.linux": "zsh",
+        "terminal.integrated.profiles.linux": {
+          "zsh": { "path": "/bin/zsh" }
+        },
+
+        // Python
+        "python.defaultInterpreterPath": "/opt/venv/bin/python",
+        "python.analysis.extraPaths": [
+          "/workspace/src"
+        ],
+
+        // Linting / formatting
+        "python.analysis.typeCheckingMode": "basic",
+        "[python]": {
+          "editor.defaultFormatter": "charliermarsh.ruff",
+          "editor.formatOnSave": true,
+          "editor.codeActionsOnSave": {
+            "source.fixAll": "explicit",
+            "source.organizeImports": "explicit"
+          }
+        },
+
+        // Files
+        "files.watcherExclude": {
+          "**/.git/**": true,
+          "**/__pycache__/**": true,
+          "**/.mypy_cache/**": true,
+          "**/outputs/**": true,
+          "**/runs/**": true,
+          "**/wandb/**": true
+        },
+        "files.exclude": {
+          "**/__pycache__": true,
+          "**/.mypy_cache": true
+        }
+      },
+
+      "extensions": [
+        // --- AI assistant ---
+        "anthropic.claude-code",
+
+        // --- Python core ---
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "charliermarsh.ruff",
+
+        // --- Jupyter (interactive prototyping) ---
+        "ms-toolsai.jupyter",
+
+        // --- Docker & containers ---
+        "ms-azuretools.vscode-docker",
+
+        // --- Git ---
+        "eamodio.gitlens",
+        "mhutchie.git-graph",
+
+        // --- Debugging ---
+        "ms-python.debugpy",
+
+        // --- File formats ---
+        "redhat.vscode-yaml",
+        "tamasfe.even-better-toml",
+        "yzhang.markdown-all-in-one",
+
+        // --- Productivity ---
+        "streetsidesoftware.code-spell-checker",
+        "usernamehw.errorlens",
+        "gruntfuggly.todo-tree",
+        "christian-kohler.path-intellisense"
+      ]
+    }
+  },
+
+  "postCreateCommand": "echo '=== Dev container ready ===' && python --version",
+
+  "shutdownAction": "none"
+}

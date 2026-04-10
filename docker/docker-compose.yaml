@@ -1,0 +1,75 @@
+# =============================================================================
+# Development Container — Docker Compose (Base Template)
+# =============================================================================
+# Usage (standalone):
+#   cd docker
+#   cp .env.example .env            # edit for your machine
+#   docker compose build
+#   docker compose up -d
+#   docker compose exec dev zsh
+#
+# Usage (devcontainer):
+#   Open in VS Code -> "Reopen in Container"
+# =============================================================================
+
+name: wisp-container  # TODO: rename to your project name
+
+services:
+  # ---------------------------------------------------------------------------
+  # Main development container
+  # ---------------------------------------------------------------------------
+  wisp-dev:  # TODO: rename to your service name
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        CUDA_VERSION: ${CUDA_VERSION:-11.7.1}
+        HOST_UID: ${HOST_UID:-1000}
+        HOST_GID: ${HOST_GID:-1000}
+        HOST_USER: ${USER:-developer}
+    image: wisp-container:latest  # TODO: rename to your image name
+
+    environment:
+      - HOST_USER=${USER:-developer}
+      - DISPLAY=${DISPLAY:-:1}
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+
+    volumes:
+      # Project workspace (host project dir -> container /workspace)
+      - ..:/workspace:cached
+
+      # Host git/ssh/auth config (read-only)
+      - ${HOME}/.ssh:/home/${USER:-developer}/.ssh:ro
+      - ${HOME}/.gitconfig:/home/${USER:-developer}/.gitconfig:ro
+      - ${HOME}/.netrc:/home/${USER:-developer}/.netrc:ro
+
+      # Claude Code config (read-write — Claude writes settings, memory, etc.)
+      - ${HOME}/.claude:/home/${USER:-developer}/.claude
+
+      # X11 / GUI forwarding
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+
+      # Pip cache (persist across rebuilds)
+      - pip-cache:/home/${USER:-developer}/.cache/pip
+
+    # Shared memory for PyTorch DataLoader workers, NCCL, etc.
+    ipc: host
+
+    # GPU support (NVIDIA)
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+    stdin_open: true
+    tty: true
+    working_dir: /workspace
+
+    command: ["sleep", "infinity"]
+
+volumes:
+  pip-cache:

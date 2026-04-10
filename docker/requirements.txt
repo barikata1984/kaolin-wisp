@@ -1,0 +1,18 @@
+# =============================================================================
+# Python packages — Base development tools
+# Installed into /opt/venv inside the container.
+#
+# Add project-specific dependencies below the base tools section.
+# =============================================================================
+
+# --- Development / debugging ---
+debugpy
+ipdb
+rich
+
+# --- Code quality ---
+ruff
+
+# --- Testing ---
+pytest>=7.0
+pytest-xdist

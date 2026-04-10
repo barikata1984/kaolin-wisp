@@ -1,0 +1,7 @@
+# Ignore everything by default, then whitelist what's needed
+**
+
+# Whitelist the docker build context files
+!docker/Dockerfile
+!docker/entrypoint.sh
+!docker/requirements.txt

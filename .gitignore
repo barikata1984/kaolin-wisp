@@ -1,17 +1,46 @@
+# OS
 .DS_Store
-*.sw*
-.ipynb_checkpoints
-compile_commands.json
+
+# IDE & Editor
 .vscode
-__pycache__
-sandbox.ipynb
-logs
-*.so
-_*/
-.polyscope.ini
-*.npz
-*.egg-info
-build
 imgui.ini
+*.sw*
+
+# Python & Virtual Environments
+__pycache__/
+*.pyc
+*.egg-info/
+*.so
+.venv/
+
+# Jupyter
+.ipynb_checkpoints
+sandbox.ipynb
+
+# Build & Distribution
+build/
+dist/
+compile_commands.json
+
+# Model & Data Files
+*.npz
+*.pt
+*.ckpt
+
+# Logs & Monitoring
+logs/
 wandb/
+runs/
+outputs/
+.polyscope.ini
 *.nsys-rep
+
+# Temporary & System
+_*/
+
+# Docker (machine-specific)
+docker/.env
+docker/docker-compose.override.yaml
+
+# Claude Code
+.claude/settings.local.json
