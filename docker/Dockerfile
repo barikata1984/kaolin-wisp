@@ -88,7 +88,8 @@ RUN if getent group ${HOST_GID} >/dev/null 2>&1; then \
        fi \
     && echo "${HOST_USER} ALL=(ALL) NOPASSWD:ALL" \
        >> /etc/sudoers.d/${HOST_USER} \
-    && chmod 0440 /etc/sudoers.d/${HOST_USER}
+    && chmod 0440 /etc/sudoers.d/${HOST_USER} \
+    && chown -R ${HOST_UID}:${HOST_GID} ${VIRTUAL_ENV}
 
 # ---- Entrypoint -------------------------------------------------------------
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
