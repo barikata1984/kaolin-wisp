@@ -1,0 +1,117 @@
+# =============================================================================
+# NeuS2 with Hash Grid + FusedAdam
+# =============================================================================
+# SDF-based neural surface reconstruction with volume rendering.
+# Uses NeuS sigmoid transformation for SDF->density conversion.
+# Hash grid backbone for fast training (NeuS2 / Instant-NSR style).
+
+device: 'cuda'
+pretrained: null
+log_level: 20    # logging.INFO
+
+blas:
+  constructor: 'OctreeAS.make_dense'
+  level: 7
+
+grid:
+  constructor: 'HashGrid.from_geometric'
+  feature_dim: 2
+  num_lods: 16
+  multiscale_type: 'cat'
+  feature_std: 1.0e-09
+  feature_bias: 0.0
+  codebook_bitwidth: 19
+  min_grid_res: 16
+  max_grid_res: 1024
+
+nef:
+  constructor: 'NeuralNeuSField'
+  pos_embedder: 'none'
+  view_embedder: 'positional'
+  view_multires: 4
+  position_input: True     # NeuS2: raw xyz concat acts as implicit geometric init
+  activation_type: 'relu'
+  layer_type: 'linear'
+  hidden_dim: 64
+  num_layers: 1
+  bias: True
+  init_inv_s: 10.0
+  prune_density_decay: 0.6
+  prune_min_density: 0.01
+
+tracer:
+  constructor: 'PackedNeuSTracer'
+  bg_color: [0.0, 0.0, 0.0]
+  num_steps: 512
+  raymarch_type: 'ray'
+  step_size: 1.0
+
+dataset:
+  constructor: 'NeRFSyntheticDataset'
+  dataset_path: 'data/'
+  split: 'train'
+  bg_color: [0.0, 0.0, 0.0]
+  mip: 0
+  dataset_num_workers: -1
+
+dataset_transform:
+  constructor: 'SampleRays'
+  num_samples: 4096
+
+trainer:
+  exp_name: 'neus2-hash-fused'
+  mode: 'train'
+  max_epochs: 200
+  save_every: 100
+  save_as_new: False
+  model_format: 'full'
+  render_every: 50
+  valid_every: 100
+  enable_amp: True
+  profile_nvtx: False
+  grid_lr_weight: 500.0
+  scheduler: True
+
+  # NeuS2-specific
+  rgb_lambda: 1.0
+  rgb_loss_type: 'l1'
+  rgb_loss_denom: 'rays'
+  eikonal_lambda: 0.1
+  mesh_log_every: 50
+  mesh_resolution: 256
+  prune_every: -1
+
+  dataloader:
+    batch_size: 1
+    num_workers: 0
+
+  optimizer:
+    constructor: 'FusedAdam'
+    lr: 0.001
+    eps: 1.0e-16
+    weight_decay: 1.0e-06
+
+tracker:
+  log_dir: '_results/logs/runs'
+  enable_tensorboard: False
+  enable_wandb: True
+  tensorboard:
+    log_dir: null
+    exp_name: null
+    log_fname: null
+  wandb:
+    project: 'wisp-neus2'
+    entity: null
+    job_type: 'train'
+    sync_tensorboard: False
+  visualizer:
+    render_res: [800, 800]
+    render_batch: 10000
+  vis_camera:
+    camera_origin: [-3.0, 0.65, -3.0]
+    camera_lookat: [0.0, 0.0, 0.0]
+    camera_fov: 30
+    camera_clamp: [0.0, 10.0]
+    viz360_num_angles: 20
+    viz360_radius: 3.0
+    viz360_render_all_lods: False
