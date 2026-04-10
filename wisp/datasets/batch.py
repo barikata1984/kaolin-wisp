@@ -7,14 +7,13 @@
 # license agreement from NVIDIA CORPORATION & AFFILIATES is strictly prohibited.
 
 
-from attrdict import AttrDict
 from typing import Optional, List, Dict, Any
 import torch
 from kaolin.render.camera import Camera
 from wisp.core import Rays
 
 
-class Batch(AttrDict):
+class Batch(dict):
     """ Represents a single batch of information sampled and collated from a WispDataset.
     Batches in Wisp keep a general structure by subclassing python's dictionaries and using their semantics.
     The exact fields each batch contain depend on the dataset type.
@@ -23,6 +22,21 @@ class Batch(AttrDict):
         super().__init__()
         for k, v in dict(*args, **kwargs).items():
             self[k] = v
+
+    def __getattr__(self, key):
+        try:
+            return self[key]
+        except KeyError:
+            raise AttributeError(f"'{type(self).__name__}' object has no attribute '{key}'")
+
+    def __setattr__(self, key, value):
+        self[key] = value
+
+    def __delattr__(self, key):
+        try:
+            del self[key]
+        except KeyError:
+            raise AttributeError(f"'{type(self).__name__}' object has no attribute '{key}'")
 
     @property
     def fields(self) -> List[str]:

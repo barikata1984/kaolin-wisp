@@ -1,8 +1,7 @@
-from attrdict import AttrDict
 from typing import Union, Type
 
 
-class MetricsBoard(AttrDict):
+class MetricsBoard(dict):
     """ A module for aggregating losses and metrics during optimization.
     Usage:
         - define_metric() declares the metrics this board expects, call this once when the optimization starts.
@@ -15,7 +14,22 @@ class MetricsBoard(AttrDict):
 
     def __init__(self):
         super().__init__()
-        self.num_samples = 0    # Number of samples reported so far, since __init__ or clear have been called.
+        self['num_samples'] = 0  # Number of samples reported so far, since __init__ or clear have been called.
+
+    def __getattr__(self, key):
+        try:
+            return self[key]
+        except KeyError:
+            raise AttributeError(f"'{type(self).__name__}' object has no attribute '{key}'")
+
+    def __setattr__(self, key, value):
+        self[key] = value
+
+    def __delattr__(self, key):
+        try:
+            del self[key]
+        except KeyError:
+            raise AttributeError(f"'{type(self).__name__}' object has no attribute '{key}'")
 
     def clear(self):
         """ Clears the MetricsBoard, essentially zeroing all accumulated values for defined metrics.
