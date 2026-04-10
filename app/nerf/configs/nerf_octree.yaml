@@ -99,6 +99,7 @@ tracker:
     project: 'wisp-nerf'
     entity: null                  # i.e. your wandb username here
     job_type: 'train'
+    sync_tensorboard: False
   visualizer:                     # Offline renderer used during validation to save snapshot of the neural field
     render_res: [ 1024, 1024 ]
     render_batch: 10000
