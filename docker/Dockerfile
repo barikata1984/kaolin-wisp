@@ -36,9 +36,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libegl1 \
         libgl1 \
         libgles2 \
+        libopengl0 \
         libosmesa6-dev \
         libglfw3 \
         libglfw3-dev \
+        # Runtime libs for OpenCV & glumpy
+        libglib2.0-0 \
+        libfreetype6-dev \
         # Editor (fallback)
         nano \
         vim \

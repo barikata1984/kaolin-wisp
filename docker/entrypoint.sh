@@ -47,11 +47,31 @@ for d in "${TARGET_HOME}/.cache" "${TARGET_HOME}/.local" "${TARGET_HOME}/.config
     chown "${TARGET_USER}:${TARGET_GROUP}" "$d" 2>/dev/null || true
 done
 
-# ---- Install project in editable mode (if pyproject.toml exists) ------------
-if [ -f /workspace/pyproject.toml ]; then
-    echo "Installing project in editable mode..."
-    pip install --no-deps -e /workspace 2>&1 | tail -1 || \
-        echo "WARNING: editable install failed (non-fatal, continuing...)"
+# ---- Install project dependencies and editable mode (first run only) --------
+SETUP_MARKER="/opt/venv/.project-installed"
+if [ ! -f "${SETUP_MARKER}" ]; then
+    if [ -f /workspace/requirements.txt ]; then
+        echo "Installing project requirements..."
+        pip install --no-cache-dir -r /workspace/requirements.txt 2>&1 | tail -3 || \
+            echo "WARNING: requirements install failed (non-fatal, continuing...)"
+    fi
+    if [ -f /workspace/requirements_app.txt ]; then
+        echo "Installing app requirements (with Cython pre-installed for glumpy)..."
+        pip install --no-cache-dir Cython 2>&1 | tail -1
+        pip install --no-cache-dir --no-build-isolation -r /workspace/requirements_app.txt 2>&1 | tail -3 || \
+            echo "WARNING: app requirements install failed (non-fatal, continuing...)"
+    fi
+    if [ -f /workspace/setup.py ]; then
+        echo "Installing project in editable mode..."
+        FORCE_CUDA=1 python setup.py develop 2>&1 | tail -3 || \
+            echo "WARNING: editable install failed (non-fatal, continuing...)"
+    elif [ -f /workspace/pyproject.toml ]; then
+        echo "Installing project in editable mode..."
+        pip install --no-deps -e /workspace 2>&1 | tail -1 || \
+            echo "WARNING: editable install failed (non-fatal, continuing...)"
+    fi
+    touch "${SETUP_MARKER}"
+    echo "Project setup complete."
 fi
 
 # ---- Drop to non-root user and exec command ---------------------------------
