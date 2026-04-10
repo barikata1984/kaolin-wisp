@@ -179,6 +179,8 @@ class Tracker:
         """
         dashboards: Dict[str, _BaseDashboard] = dict()
         if cfg.enable_tensorboard:
+            if cfg.tensorboard.log_dir is None:
+                cfg.tensorboard.log_dir = cfg.log_dir
             if cfg.tensorboard.exp_name is None:
                 cfg.tensorboard.exp_name = exp_name
             if cfg.tensorboard.log_fname is None:
@@ -376,7 +378,7 @@ class _BaseDashboard(ABC):
 class _Tensorboard(_BaseDashboard):
     """ Wraps around tensorboard functionality """
 
-    def __init__(self, log_dir: Optinal[str], exp_name: Optional[str], log_fname: Optional[str]):
+    def __init__(self, log_dir: Optional[str], exp_name: Optional[str], log_fname: Optional[str]):
         """ Tensorboard experiments dashboard.
         Args:
             log_dir (str): Path where the tensorboard runs are saved.

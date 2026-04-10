@@ -198,10 +198,9 @@ def _build_config_for_callable(cls: Type, func: Callable, use_manual_fields: boo
     # 1) Removal of unsupported types like torch.Tensor is using our own filter
     # 2) The docstring of each parameter is passed to the dataclass field, which enables tyro to show it with --help
     if use_manual_fields:
-
+        original_annotations = None
         try:
             implicit_types = generate_implicit_types_from_defaults(func)
-            original_annotations = None
             if len(implicit_types) > 0:
                 original_annotations = copy.deepcopy(func.__annotations__)
                 func.__annotations__.update(implicit_types)
